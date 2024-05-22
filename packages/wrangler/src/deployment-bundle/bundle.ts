@@ -318,7 +318,11 @@ export async function bundleWorker(
 		plugins: [
 			moduleCollector.plugin,
 			...(legacyNodeCompat && !nodejsCompat
-				? [NodeGlobalsPolyfills({ buffer: true }), standardURLPlugin(), NodeModulesPolyfills()]
+				? [
+						NodeGlobalsPolyfills({ buffer: true }),
+						standardURLPlugin(),
+						NodeModulesPolyfills(),
+					]
 				: []),
 			// Runtime Node.js compatibility
 			...(!!nodejsCompat && !legacyNodeCompat
