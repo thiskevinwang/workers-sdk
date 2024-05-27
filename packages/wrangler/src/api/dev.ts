@@ -1,6 +1,7 @@
 import { fetch, Request } from "undici";
 import { startApiDev, startDev } from "../dev";
 import { logger } from "../logger";
+import { printWranglerBanner } from "../update-check";
 import type { Environment } from "../config";
 import type { Rule } from "../config/environment";
 import type { CfModule } from "../deployment-bundle/worker";
@@ -79,6 +80,7 @@ export interface UnstableDevOptions {
 		testScheduled?: boolean; // Test scheduled events by visiting /__scheduled in browser
 		watch?: boolean; // unstable_dev doesn't support watch-mode yet in testMode
 	};
+	disableWranglerBanner?: boolean;
 }
 
 export interface UnstableDevWorker {
@@ -125,6 +127,12 @@ export async function unstable_dev(
 		d1Databases,
 		enablePagesAssetsServiceBinding,
 	} = experimentalOptions;
+
+	const updateCheck = options?.updateCheck ?? false;
+
+	if (!options?.disableWranglerBanner) {
+		await printWranglerBanner(updateCheck);
+	}
 
 	if (apiOptions) {
 		logger.error(
@@ -211,7 +219,7 @@ export async function unstable_dev(
 		...options,
 		logLevel: options?.logLevel ?? defaultLogLevel,
 		port: options?.port ?? 0,
-		updateCheck: options?.updateCheck ?? false,
+		updateCheck,
 		experimentalVersions: undefined,
 	};
 

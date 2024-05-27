@@ -12,6 +12,7 @@ import { logger } from "../logger";
 import * as metrics from "../metrics";
 import { isNavigatorDefined } from "../navigator-user-agent";
 import { getBasePath } from "../paths";
+import { printWranglerBanner } from "../update-check";
 import * as shellquote from "../utils/shell-quote";
 import { buildFunctions } from "./buildFunctions";
 import { ROUTES_SPEC_VERSION, SECONDS_TO_WAIT_FOR_PROXY } from "./constants";
@@ -249,6 +250,13 @@ export const Handler = async (args: PagesDevArguments) => {
 	if (args.logLevel) {
 		logger.loggerLevel = args.logLevel;
 	}
+
+	/*
+	 * `unstable_dev` already does this for us, but ideally we'd want to print
+	 * the banner right at the top, before any other logs. So let's turn that
+	 * off, and print here instead.
+	 */
+	await printWranglerBanner(true);
 
 	if (args.experimentalLocal) {
 		logger.warn(
@@ -688,6 +696,7 @@ export const Handler = async (args: PagesDevArguments) => {
 			testMode: false,
 			watch: true,
 		},
+		disableWranglerBanner: true,
 	});
 	await metrics.sendMetricsEvent("run pages dev");
 
