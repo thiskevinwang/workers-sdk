@@ -34,6 +34,257 @@ export type EsbuildBundle = {
 	sourceMapMetadata: SourceMapMetadata | undefined;
 };
 
+export type EsbuildBundleProps = {
+	entry: Entry;
+	destination: string | undefined;
+	jsxFactory: string | undefined;
+	jsxFragment: string | undefined;
+	processEntrypoint: boolean;
+	additionalModules: CfModule[];
+	rules: Config["rules"];
+	assets: Config["assets"];
+	define: Config["define"];
+	serveAssetsFromWorker: boolean;
+	tsconfig: string | undefined;
+	minify: boolean | undefined;
+	legacyNodeCompat: boolean | undefined;
+	nodejsCompat: boolean | undefined;
+	noBundle: boolean;
+	findAdditionalModules: boolean | undefined;
+	durableObjects: Config["durable_objects"];
+	local: boolean;
+	targetConsumer: "dev" | "deploy";
+	testScheduled: boolean;
+	projectRoot: string | undefined;
+	onStart: () => void;
+	onComplete: (bundle: EsbuildBundle) => void;
+	defineNavigatorUserAgent: boolean;
+};
+
+function runBuild(
+	{
+		entry,
+		destination,
+		jsxFactory,
+		jsxFragment,
+		processEntrypoint,
+		additionalModules,
+		rules,
+		assets,
+		serveAssetsFromWorker,
+		tsconfig,
+		minify,
+		legacyNodeCompat,
+		nodejsCompat,
+		define,
+		noBundle,
+		findAdditionalModules,
+		durableObjects,
+		local,
+		targetConsumer,
+		testScheduled,
+		projectRoot,
+		onStart,
+		onComplete,
+		defineNavigatorUserAgent,
+	}: {
+		entry: Entry;
+		destination: string | undefined;
+		jsxFactory: string | undefined;
+		jsxFragment: string | undefined;
+		processEntrypoint: boolean;
+		additionalModules: CfModule[];
+		rules: Config["rules"];
+		assets: Config["assets"];
+		define: Config["define"];
+		serveAssetsFromWorker: boolean;
+		tsconfig: string | undefined;
+		minify: boolean | undefined;
+		legacyNodeCompat: boolean | undefined;
+		nodejsCompat: boolean | undefined;
+		noBundle: boolean;
+		findAdditionalModules: boolean | undefined;
+		durableObjects: Config["durable_objects"];
+		local: boolean;
+		targetConsumer: "dev" | "deploy";
+		testScheduled: boolean;
+		projectRoot: string | undefined;
+		onStart: () => void;
+		onComplete: (bundle: EsbuildBundle) => void;
+		defineNavigatorUserAgent: boolean;
+	},
+	setBundle: React.Dispatch<React.SetStateAction<EsbuildBundle | undefined>>,
+	onErr: (err: Error) => void
+) {
+	let stopWatching: (() => void) | undefined = undefined;
+
+	const entryDirectory = path.dirname(entry.file);
+	const moduleCollector = noBundle
+		? noopModuleCollector
+		: createModuleCollector({
+				wrangler1xLegacyModuleReferences: getWrangler1xLegacyModuleReferences(
+					entryDirectory,
+					entry.file
+				),
+				entry,
+				findAdditionalModules: findAdditionalModules ?? false,
+				rules: rules,
+			});
+
+	async function getAdditionalModules() {
+		return noBundle
+			? dedupeModulesByName([
+					...((await doFindAdditionalModules(entry, rules)) ?? []),
+					...additionalModules,
+				])
+			: additionalModules;
+	}
+
+	async function updateBundle() {
+		const newAdditionalModules = await getAdditionalModules();
+		// nothing really changes here, so let's increment the id
+		// to change the return object's identity
+		setBundle((previousBundle) => {
+			assert(
+				previousBundle,
+				"Rebuild triggered with no previous build available"
+			);
+			previousBundle.modules = dedupeModulesByName([
+				...(moduleCollector?.modules ?? []),
+				...newAdditionalModules,
+			]);
+			return {
+				...previousBundle,
+				entrypointSource: readFileSync(previousBundle.path, "utf8"),
+				id: previousBundle.id + 1,
+			};
+		});
+	}
+
+	let bundled = false;
+	const onEnd = {
+		name: "on-end",
+		setup(b: PluginBuild) {
+			b.onStart(() => {
+				onStart();
+			});
+			b.onEnd(async (result: BuildResult) => {
+				const errors = result.errors;
+				const warnings = result.warnings;
+				if (errors.length > 0) {
+					if (!legacyNodeCompat) {
+						rewriteNodeCompatBuildFailure(result.errors);
+					}
+					logBuildFailure(errors, warnings);
+					return;
+				}
+
+				if (warnings.length > 0) {
+					logBuildWarnings(warnings);
+				}
+
+				if (!bundled) {
+					// First bundle, no need to update bundle
+					bundled = true;
+				} else {
+					await updateBundle();
+				}
+			});
+		},
+	};
+
+	async function build() {
+		if (!destination) {
+			return;
+		}
+
+		const newAdditionalModules = await getAdditionalModules();
+		const bundleResult =
+			processEntrypoint || !noBundle
+				? await bundleWorker(entry, destination, {
+						bundle: !noBundle,
+						moduleCollector,
+						additionalModules: newAdditionalModules,
+						serveAssetsFromWorker,
+						jsxFactory,
+						jsxFragment,
+						watch: true,
+						tsconfig,
+						minify,
+						legacyNodeCompat,
+						nodejsCompat,
+						doBindings: durableObjects.bindings,
+						define,
+						checkFetch: true,
+						assets,
+						// disable the cache in dev
+						bypassAssetCache: true,
+						targetConsumer,
+						testScheduled,
+						plugins: [onEnd],
+						local,
+						projectRoot,
+						defineNavigatorUserAgent,
+					})
+				: undefined;
+
+		// Capture the `stop()` method to use as the `useEffect()` destructor.
+		stopWatching = bundleResult?.stop;
+
+		// if "noBundle" is true, then we need to manually watch all modules and
+		// trigger "builds" when any change
+		if (noBundle) {
+			const watching = [path.resolve(entry.moduleRoot)];
+			// Check whether we need to watch a Python requirements.txt file.
+			const watchPythonRequirements =
+				getBundleType(entry.format, entry.file) === "python"
+					? path.resolve(entry.directory, "requirements.txt")
+					: undefined;
+
+			if (watchPythonRequirements) {
+				watching.push(watchPythonRequirements);
+			}
+
+			const watcher = watch(watching, {
+				persistent: true,
+				ignored: [".git", "node_modules"],
+			}).on("change", async (_event) => {
+				await updateBundle();
+			});
+
+			stopWatching = () => {
+				void watcher.close();
+			};
+		}
+		const entrypointPath = realpathSync(
+			bundleResult?.resolvedEntryPointPath ?? entry.file
+		);
+		setBundle({
+			id: 0,
+			entry,
+			path: entrypointPath,
+			type: bundleResult?.bundleType ?? getBundleType(entry.format, entry.file),
+			modules: bundleResult ? bundleResult.modules : newAdditionalModules,
+			dependencies: bundleResult?.dependencies ?? {},
+			sourceMapPath: bundleResult?.sourceMapPath,
+			sourceMapMetadata: bundleResult?.sourceMapMetadata,
+			entrypointSource: readFileSync(entrypointPath, "utf8"),
+		});
+	}
+
+	build().catch((err) => {
+		// If esbuild fails on first run, we want to quit the process
+		// since we can't recover from here
+		// related: https://github.com/evanw/esbuild/issues/1037
+		onErr(err);
+	});
+
+	return () => {
+		console.log("stop bundle", stopWatching);
+		stopWatching?.();
+	};
+}
+
 export function useEsbuild({
 	entry,
 	destination,
@@ -51,216 +302,48 @@ export function useEsbuild({
 	define,
 	noBundle,
 	findAdditionalModules,
-	workerDefinitions,
-	services,
 	durableObjects,
 	local,
 	targetConsumer,
 	testScheduled,
-	experimentalLocal,
 	projectRoot,
 	onStart,
 	onComplete,
 	defineNavigatorUserAgent,
-}: {
-	entry: Entry;
-	destination: string | undefined;
-	jsxFactory: string | undefined;
-	jsxFragment: string | undefined;
-	processEntrypoint: boolean;
-	additionalModules: CfModule[];
-	rules: Config["rules"];
-	assets: Config["assets"];
-	define: Config["define"];
-	services: Config["services"];
-	serveAssetsFromWorker: boolean;
-	tsconfig: string | undefined;
-	minify: boolean | undefined;
-	legacyNodeCompat: boolean | undefined;
-	nodejsCompat: boolean | undefined;
-	noBundle: boolean;
-	findAdditionalModules: boolean | undefined;
-	workerDefinitions: WorkerRegistry;
-	durableObjects: Config["durable_objects"];
-	local: boolean;
-	targetConsumer: "dev" | "deploy";
-	testScheduled: boolean;
-	experimentalLocal: boolean | undefined;
-	projectRoot: string | undefined;
-	onStart: () => void;
-	onComplete: (bundle: EsbuildBundle) => void;
-	defineNavigatorUserAgent: boolean;
-}): EsbuildBundle | undefined {
+}: EsbuildBundleProps): EsbuildBundle | undefined {
 	const [bundle, setBundle] = useState<EsbuildBundle>();
 	const { exit } = useApp();
 	useEffect(() => {
-		let stopWatching: (() => void) | undefined = undefined;
-
-		const entryDirectory = path.dirname(entry.file);
-		const moduleCollector = noBundle
-			? noopModuleCollector
-			: createModuleCollector({
-					wrangler1xLegacyModuleReferences: getWrangler1xLegacyModuleReferences(
-						entryDirectory,
-						entry.file
-					),
-					entry,
-					findAdditionalModules: findAdditionalModules ?? false,
-					rules: rules,
-				});
-
-		async function getAdditionalModules() {
-			return noBundle
-				? dedupeModulesByName([
-						...((await doFindAdditionalModules(entry, rules)) ?? []),
-						...additionalModules,
-					])
-				: additionalModules;
-		}
-
-		async function updateBundle() {
-			const newAdditionalModules = await getAdditionalModules();
-			// nothing really changes here, so let's increment the id
-			// to change the return object's identity
-			setBundle((previousBundle) => {
-				assert(
-					previousBundle,
-					"Rebuild triggered with no previous build available"
-				);
-				previousBundle.modules = dedupeModulesByName([
-					...(moduleCollector?.modules ?? []),
-					...newAdditionalModules,
-				]);
-				return {
-					...previousBundle,
-					entrypointSource: readFileSync(previousBundle.path, "utf8"),
-					id: previousBundle.id + 1,
-				};
-			});
-		}
-
-		let bundled = false;
-		const onEnd = {
-			name: "on-end",
-			setup(b: PluginBuild) {
-				b.onStart(() => {
-					onStart();
-				});
-				b.onEnd(async (result: BuildResult) => {
-					const errors = result.errors;
-					const warnings = result.warnings;
-					if (errors.length > 0) {
-						if (!legacyNodeCompat) {
-							rewriteNodeCompatBuildFailure(result.errors);
-						}
-						logBuildFailure(errors, warnings);
-						return;
-					}
-
-					if (warnings.length > 0) {
-						logBuildWarnings(warnings);
-					}
-
-					if (!bundled) {
-						// First bundle, no need to update bundle
-						bundled = true;
-					} else {
-						await updateBundle();
-					}
-				});
-			},
-		};
-
-		async function build() {
-			if (!destination) {
-				return;
-			}
-
-			const newAdditionalModules = await getAdditionalModules();
-			const bundleResult =
-				processEntrypoint || !noBundle
-					? await bundleWorker(entry, destination, {
-							bundle: !noBundle,
-							moduleCollector,
-							additionalModules: newAdditionalModules,
-							serveAssetsFromWorker,
-							jsxFactory,
-							jsxFragment,
-							watch: true,
-							tsconfig,
-							minify,
-							legacyNodeCompat,
-							nodejsCompat,
-							doBindings: durableObjects.bindings,
-							define,
-							checkFetch: true,
-							assets,
-							// disable the cache in dev
-							bypassAssetCache: true,
-							targetConsumer,
-							testScheduled,
-							plugins: [onEnd],
-							local,
-							projectRoot,
-							defineNavigatorUserAgent,
-						})
-					: undefined;
-
-			// Capture the `stop()` method to use as the `useEffect()` destructor.
-			stopWatching = bundleResult?.stop;
-
-			// if "noBundle" is true, then we need to manually watch all modules and
-			// trigger "builds" when any change
-			if (noBundle) {
-				const watching = [path.resolve(entry.moduleRoot)];
-				// Check whether we need to watch a Python requirements.txt file.
-				const watchPythonRequirements =
-					getBundleType(entry.format, entry.file) === "python"
-						? path.resolve(entry.directory, "requirements.txt")
-						: undefined;
-
-				if (watchPythonRequirements) {
-					watching.push(watchPythonRequirements);
-				}
-
-				const watcher = watch(watching, {
-					persistent: true,
-					ignored: [".git", "node_modules"],
-				}).on("change", async (_event) => {
-					await updateBundle();
-				});
-
-				stopWatching = () => {
-					void watcher.close();
-				};
-			}
-			const entrypointPath = realpathSync(
-				bundleResult?.resolvedEntryPointPath ?? entry.file
-			);
-			setBundle({
-				id: 0,
+		return runBuild(
+			{
 				entry,
-				path: entrypointPath,
-				type:
-					bundleResult?.bundleType ?? getBundleType(entry.format, entry.file),
-				modules: bundleResult ? bundleResult.modules : newAdditionalModules,
-				dependencies: bundleResult?.dependencies ?? {},
-				sourceMapPath: bundleResult?.sourceMapPath,
-				sourceMapMetadata: bundleResult?.sourceMapMetadata,
-				entrypointSource: readFileSync(entrypointPath, "utf8"),
-			});
-		}
-
-		build().catch((err) => {
-			// If esbuild fails on first run, we want to quit the process
-			// since we can't recover from here
-			// related: https://github.com/evanw/esbuild/issues/1037
-			exit(err);
-		});
-
-		return () => {
-			stopWatching?.();
-		};
+				destination,
+				jsxFactory,
+				jsxFragment,
+				processEntrypoint,
+				additionalModules,
+				rules,
+				assets,
+				serveAssetsFromWorker,
+				tsconfig,
+				minify,
+				legacyNodeCompat,
+				nodejsCompat,
+				define,
+				noBundle,
+				findAdditionalModules,
+				durableObjects,
+				local,
+				targetConsumer,
+				testScheduled,
+				projectRoot,
+				onStart,
+				onComplete,
+				defineNavigatorUserAgent,
+			},
+			setBundle,
+			(err) => exit(err)
+		);
 	}, [
 		entry,
 		destination,
@@ -279,13 +362,10 @@ export function useEsbuild({
 		nodejsCompat,
 		define,
 		assets,
-		services,
 		durableObjects,
-		workerDefinitions,
 		local,
 		targetConsumer,
 		testScheduled,
-		experimentalLocal,
 		projectRoot,
 		onStart,
 		defineNavigatorUserAgent,
