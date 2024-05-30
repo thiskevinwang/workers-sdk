@@ -294,6 +294,13 @@ export function devOptions(yargs: CommonYargsArgv) {
 					"Use the experimental DevEnv runtime instantiation (unified across wrangler dev and unstable_dev)",
 				default: false,
 			})
+			.option("experimental-devenv-bundler", {
+				alias: ["x-devenv-bundler"],
+				type: "boolean",
+				describe:
+					"Use the experimental DevEnv bundler instantiation (unified across wrangler dev and unstable_dev)",
+				default: false,
+			})
 	);
 }
 
@@ -520,6 +527,7 @@ export async function startDev(args: StartDevOptions) {
 					testScheduled={args.testScheduled}
 					projectRoot={projectRoot}
 					experimentalDevenvRuntime={args.experimentalDevenvRuntime}
+					experimentalDevenvBundler={args.experimentalDevenvBundler}
 				/>
 			);
 		}
@@ -648,6 +656,7 @@ export async function startApiDev(args: StartDevOptions) {
 			disableDevRegistry: args.disableDevRegistry ?? false,
 			projectRoot,
 			experimentalDevenvRuntime: args.experimentalDevenvRuntime,
+			experimentalDevenvBundler: args.experimentalDevenvBundler,
 		});
 	}
 

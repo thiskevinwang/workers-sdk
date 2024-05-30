@@ -61,7 +61,7 @@ export type EsbuildBundleProps = {
 	defineNavigatorUserAgent: boolean;
 };
 
-function runBuild(
+export function runBuild(
 	{
 		entry,
 		destination,
@@ -85,8 +85,8 @@ function runBuild(
 		testScheduled,
 		projectRoot,
 		onStart,
-		onComplete,
 		defineNavigatorUserAgent,
+		enableWatchMode = true,
 	}: {
 		entry: Entry;
 		destination: string | undefined;
@@ -110,10 +110,12 @@ function runBuild(
 		testScheduled: boolean;
 		projectRoot: string | undefined;
 		onStart: () => void;
-		onComplete: (bundle: EsbuildBundle) => void;
 		defineNavigatorUserAgent: boolean;
+		enableWatchMode?: boolean;
 	},
-	setBundle: React.Dispatch<React.SetStateAction<EsbuildBundle | undefined>>,
+	setBundle: (
+		cb: (previous: EsbuildBundle | undefined) => EsbuildBundle
+	) => void,
 	onErr: (err: Error) => void
 ) {
 	let stopWatching: (() => void) | undefined = undefined;
@@ -208,7 +210,7 @@ function runBuild(
 						serveAssetsFromWorker,
 						jsxFactory,
 						jsxFragment,
-						watch: true,
+						watch: enableWatchMode,
 						tsconfig,
 						minify,
 						legacyNodeCompat,
@@ -233,7 +235,7 @@ function runBuild(
 
 		// if "noBundle" is true, then we need to manually watch all modules and
 		// trigger "builds" when any change
-		if (noBundle) {
+		if (noBundle && enableWatchMode) {
 			const watching = [path.resolve(entry.moduleRoot)];
 			// Check whether we need to watch a Python requirements.txt file.
 			const watchPythonRequirements =
@@ -259,7 +261,7 @@ function runBuild(
 		const entrypointPath = realpathSync(
 			bundleResult?.resolvedEntryPointPath ?? entry.file
 		);
-		setBundle({
+		setBundle(() => ({
 			id: 0,
 			entry,
 			path: entrypointPath,
@@ -269,7 +271,7 @@ function runBuild(
 			sourceMapPath: bundleResult?.sourceMapPath,
 			sourceMapMetadata: bundleResult?.sourceMapMetadata,
 			entrypointSource: readFileSync(entrypointPath, "utf8"),
-		});
+		}));
 	}
 
 	build().catch((err) => {
@@ -280,7 +282,6 @@ function runBuild(
 	});
 
 	return () => {
-		console.log("stop bundle", stopWatching);
 		stopWatching?.();
 	};
 }
@@ -338,7 +339,6 @@ export function useEsbuild({
 				testScheduled,
 				projectRoot,
 				onStart,
-				onComplete,
 				defineNavigatorUserAgent,
 			},
 			setBundle,
