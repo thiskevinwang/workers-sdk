@@ -54,6 +54,8 @@ export class ProxyController extends Controller<ProxyControllerEventMap> {
 
 	protected latestConfig?: StartDevWorkerOptions;
 	protected latestBundle?: EsbuildBundle;
+	protected latestProxyData?: ProxyData;
+
 	secret = randomUUID();
 
 	protected createProxyWorker() {
@@ -367,7 +369,8 @@ export class ProxyController extends Controller<ProxyControllerEventMap> {
 	}
 	onReloadComplete(data: ReloadCompleteEvent) {
 		this.latestConfig = data.config;
-		this.latestBundle = data.bundle; // TODO(now): update `latestBundle` type
+		this.latestBundle = data.bundle;
+		this.latestProxyData = data.proxyData;
 
 		void this.sendMessageToProxyWorker({
 			type: "play",
@@ -498,9 +501,12 @@ export class ProxyController extends Controller<ProxyControllerEventMap> {
 	// *********************
 
 	emitReadyEvent(proxyWorker: Miniflare) {
+		assert(this.latestConfig && this.latestProxyData);
 		const data: ReadyEvent = {
 			type: "ready",
 			proxyWorker,
+			config: this.latestConfig,
+			proxyData: this.latestProxyData,
 		};
 
 		this.emit("ready", data);

@@ -2,19 +2,21 @@ import assert from "assert";
 import path from "path";
 import { watch } from "chokidar";
 import { runCustomBuild } from "../../deployment-bundle/run-custom-build";
-import { EsbuildBundle, runBuild } from "../../dev/use-esbuild";
+import { runBuild } from "../../dev/use-esbuild";
 import { logger } from "../../logger";
 import { isNavigatorDefined } from "../../navigator-user-agent";
-import { EphemeralDirectory, getWranglerTmpDir } from "../../paths";
+import { getWranglerTmpDir } from "../../paths";
 import { Controller } from "./BaseController";
 import { castErrorCause } from "./events";
-import { StartDevWorkerOptions } from "./types";
+import type { EsbuildBundle } from "../../dev/use-esbuild";
+import type { EphemeralDirectory } from "../../paths";
 import type { ControllerEventMap } from "./BaseController";
 import type {
 	BundleCompleteEvent,
 	BundleStartEvent,
 	ConfigUpdateEvent,
 } from "./events";
+import type { StartDevWorkerOptions } from "./types";
 
 export type BundlerControllerEventMap = ControllerEventMap & {
 	bundleStart: [BundleStartEvent];
@@ -67,6 +69,7 @@ export class BundlerController extends Controller<BundlerControllerEventMap> {
 					config.compatibilityDate,
 					config.compatibilityFlags
 				),
+				enableWatchMode,
 			},
 			setBundle,
 			(err) =>
@@ -178,10 +181,9 @@ export class BundlerController extends Controller<BundlerControllerEventMap> {
 				data: undefined,
 			});
 		}
-		console.log("onConfigUpdate", event.config.build?.custom.command);
 
 		// Cleanup both custom builds and esbuild watch builds in case we're switching from one to the other
-		this.#customBuildWatcher?.close();
+		await this.#customBuildWatcher?.close();
 		await this.#bundlerCleanup?.();
 
 		if (event.config.build?.custom.command) {
@@ -192,7 +194,7 @@ export class BundlerController extends Controller<BundlerControllerEventMap> {
 	}
 
 	async teardown() {
-		this.#customBuildWatcher?.close();
+		await this.#customBuildWatcher?.close();
 		await this.#bundlerCleanup?.();
 		this.#tmpDir?.remove();
 	}

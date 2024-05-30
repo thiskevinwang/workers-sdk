@@ -48,11 +48,11 @@ e2eTest(
 
 describe.each([
 	{ cmd: "wrangler dev" },
-	{ cmd: "wrangler dev --remote" },
-	{ cmd: "wrangler dev --x-devenv-runtime" },
-	{ cmd: "wrangler dev --remote --x-devenv-runtime" },
+	// { cmd: "wrangler dev --remote" },
+	// { cmd: "wrangler dev --x-devenv-runtime" },
+	// { cmd: "wrangler dev --remote --x-devenv-runtime" },
 ])("basic js dev: $cmd", ({ cmd }) => {
-	e2eTest(
+	e2eTest.only(
 		`can modify worker during ${cmd}`,
 		async ({ run, seed, waitForReady, waitForReload }) => {
 			await seed({

@@ -16,6 +16,7 @@ import { useErrorHandler, withErrorBoundary } from "react-error-boundary";
 import onExit from "signal-exit";
 import { fetch } from "undici";
 import { DevEnv } from "../api";
+import { ProxyController } from "../api/startDevWorker/ProxyController";
 import { createDeferred } from "../api/startDevWorker/utils";
 import { runCustomBuild } from "../deployment-bundle/run-custom-build";
 import {
@@ -36,6 +37,7 @@ import { useEsbuild } from "./use-esbuild";
 import { validateDevProps } from "./validate-dev-props";
 import type {
 	ProxyData,
+	ReadyEvent,
 	ReloadCompleteEvent,
 	StartDevWorkerOptions,
 } from "../api";
@@ -298,7 +300,37 @@ function DevSession(props: DevSessionProps) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	const [devEnv] = useState(() => new DevEnv());
+	const [devEnv] = useState(() => {
+		const proxy = new ProxyController();
+		if (props.experimentalDevenvBundler) {
+			// The ProxyWorker will have a stable host and port, so only listen for the first update
+			proxy.once("ready", async (event: ReadyEvent) => {
+				const url = await event.proxyWorker.ready;
+				const finalIp = url.hostname;
+				const finalPort = parseInt(url.port);
+
+				if (!event.config.dev?.remote) {
+					await maybeRegisterLocalWorker(
+						url,
+						event.config.name,
+						event.proxyData.internalDurableObjects,
+						event.proxyData.entrypointAddresses
+					);
+				}
+
+				if (process.send) {
+					process.send(
+						JSON.stringify({
+							event: "DEV_SERVER_READY",
+							ip: finalIp,
+							port: finalPort,
+						})
+					);
+				}
+			});
+		}
+		return new DevEnv({ proxy });
+	});
 	useEffect(() => {
 		return () => {
 			void devEnv.teardown();
@@ -432,6 +464,20 @@ function DevSession(props: DevSessionProps) {
 		props.jsxFactory,
 		props.jsxFragment,
 		props.assetsConfig,
+		props.additionalModules,
+		props.build.command,
+		props.build.cwd,
+		props.build.watch_dir,
+		props.define,
+		props.entry,
+		props.findAdditionalModules,
+		props.legacyNodeCompat,
+		props.minify,
+		props.noBundle,
+		props.processEntrypoint,
+		props.projectRoot,
+		props.rules,
+		props.testScheduled,
 	]);
 
 	const onBundleStart = useCallback(() => {
@@ -460,7 +506,12 @@ function DevSession(props: DevSessionProps) {
 				});
 			}
 		},
-		[devEnv, startDevWorkerOptions, props.experimentalDevenvRuntime]
+		[
+			devEnv,
+			startDevWorkerOptions,
+			props.experimentalDevenvRuntime,
+			props.experimentalDevenvBundler,
+		]
 	);
 	const esbuildStartTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 	const latestReloadCompleteEvent = useRef<ReloadCompleteEvent>();
@@ -510,15 +561,17 @@ function DevSession(props: DevSessionProps) {
 			config: startDevWorkerOptions,
 		});
 		if (props.experimentalDevenvBundler) {
-			devEnv.bundler.onConfigUpdate({
+			void devEnv.bundler.onConfigUpdate({
 				type: "configUpdate",
 				config: startDevWorkerOptions,
 			});
 		}
 	}, [devEnv, startDevWorkerOptions, props.experimentalDevenvBundler]);
 	if (!props.experimentalDevenvBundler) {
+		// eslint-disable-next-line react-hooks/rules-of-hooks
 		useCustomBuild(props.entry, props.build, onBundleStart, onCustomBuildEnd);
 
+		// eslint-disable-next-line react-hooks/rules-of-hooks
 		const bundle = useEsbuild({
 			entry: props.entry,
 			destination: directory,

@@ -1,4 +1,3 @@
-import { Entry } from "../../deployment-bundle/entry";
 import type { Config } from "../../config";
 import type {
 	CustomDomainRoute,
@@ -6,6 +5,7 @@ import type {
 	ZoneIdRoute,
 	ZoneNameRoute,
 } from "../../config/environment";
+import type { Entry } from "../../deployment-bundle/entry";
 import type {
 	CfAnalyticsEngineDataset,
 	CfConstellation,

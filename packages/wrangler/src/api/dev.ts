@@ -80,6 +80,7 @@ export interface UnstableDevOptions {
 		watch?: boolean; // unstable_dev doesn't support watch-mode yet in testMode
 	};
 	experimentalDevenvRuntime?: boolean;
+	experimentalDevenvBundler?: boolean;
 }
 
 export interface UnstableDevWorker {
@@ -215,6 +216,7 @@ export async function unstable_dev(
 		updateCheck: options?.updateCheck ?? false,
 		experimentalVersions: undefined,
 		experimentalDevenvRuntime: options?.experimentalDevenvRuntime ?? false,
+		experimentalDevenvBundler: options?.experimentalDevenvBundler ?? false,
 	};
 
 	//due to Pages adoption of unstable_dev, we can't *just* disable rebuilds and watching. instead, we'll have two versions of startDev, which will converge.
