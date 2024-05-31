@@ -1,4 +1,5 @@
 import type { Route } from "../config/environment";
+import type { WorkerMetadataBinding } from "./create-worker-upload-form";
 import type { Json } from "miniflare";
 
 /**
@@ -313,6 +314,13 @@ export interface CfWorkerInit {
 		logfwdr: CfLogfwdr | undefined;
 		unsafe: CfUnsafe | undefined;
 	};
+	/**
+	 * The raw bindings - this is basically never provided and it'll be the bindings above
+	 * but if we're just taking from the api and re-putting then this is how we can do that
+	 * without going between the different types
+	 */
+	rawBindings?: WorkerMetadataBinding[];
+
 	migrations: CfDurableObjectMigrations | undefined;
 	compatibility_date: string | undefined;
 	compatibility_flags: string[] | undefined;

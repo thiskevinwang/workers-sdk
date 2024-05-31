@@ -317,7 +317,7 @@ export const secret = (secretYargs: CommonYargsArgv) => {
  * Remove trailing white space from inputs.
  * Matching Wrangler legacy behavior with handling inputs
  */
-function trimTrailingWhitespace(str: string) {
+export function trimTrailingWhitespace(str: string) {
 	return str.trimEnd();
 }
 
@@ -327,7 +327,7 @@ function trimTrailingWhitespace(str: string) {
  * This function can be used to grab the incoming stream of data from, say,
  * piping the output of another process into the wrangler process.
  */
-function readFromStdin(): Promise<string> {
+export function readFromStdin(): Promise<string> {
 	return new Promise((resolve, reject) => {
 		const stdin = process.stdin;
 		const chunks: string[] = [];
