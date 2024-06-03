@@ -188,8 +188,7 @@ export type DevProps = {
 	testScheduled: boolean | undefined;
 	projectRoot: string | undefined;
 
-	experimentalDevenvRuntime: boolean;
-	experimentalDevenvBundler: boolean;
+	experimentalDevEnv: boolean;
 };
 
 export function DevImplementation(props: DevProps): JSX.Element {
@@ -302,7 +301,7 @@ function DevSession(props: DevSessionProps) {
 
 	const [devEnv] = useState(() => {
 		const proxy = new ProxyController();
-		if (props.experimentalDevenvBundler) {
+		if (props.experimentalDevEnv) {
 			// The ProxyWorker will have a stable host and port, so only listen for the first update
 			proxy.once("ready", async (event: ReadyEvent) => {
 				const url = await event.proxyWorker.ready;
@@ -488,17 +487,7 @@ function DevSession(props: DevSessionProps) {
 	}, [devEnv, startDevWorkerOptions]);
 	const onBundleComplete = useCallback(
 		(bundle: EsbuildBundle) => {
-			if (props.experimentalDevenvRuntime) {
-				if (!props.experimentalDevenvBundler) {
-					devEnv.runtimes.forEach((runtime) =>
-						runtime.onBundleComplete({
-							type: "bundleComplete",
-							config: startDevWorkerOptions,
-							bundle,
-						})
-					);
-				}
-			} else {
+			if (!props.experimentalDevEnv) {
 				devEnv.proxy.onReloadStart({
 					type: "reloadStart",
 					config: startDevWorkerOptions,
@@ -506,12 +495,7 @@ function DevSession(props: DevSessionProps) {
 				});
 			}
 		},
-		[
-			devEnv,
-			startDevWorkerOptions,
-			props.experimentalDevenvRuntime,
-			props.experimentalDevenvBundler,
-		]
+		[devEnv, startDevWorkerOptions, props.experimentalDevEnv]
 	);
 	const esbuildStartTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 	const latestReloadCompleteEvent = useRef<ReloadCompleteEvent>();
@@ -560,14 +544,14 @@ function DevSession(props: DevSessionProps) {
 			type: "configUpdate",
 			config: startDevWorkerOptions,
 		});
-		if (props.experimentalDevenvBundler) {
+		if (props.experimentalDevEnv) {
 			void devEnv.bundler.onConfigUpdate({
 				type: "configUpdate",
 				config: startDevWorkerOptions,
 			});
 		}
-	}, [devEnv, startDevWorkerOptions, props.experimentalDevenvBundler]);
-	if (!props.experimentalDevenvBundler) {
+	}, [devEnv, startDevWorkerOptions, props.experimentalDevEnv]);
+	if (!props.experimentalDevEnv) {
 		// eslint-disable-next-line react-hooks/rules-of-hooks
 		useCustomBuild(props.entry, props.build, onBundleStart, onCustomBuildEnd);
 
@@ -692,7 +676,7 @@ function DevSession(props: DevSessionProps) {
 				enablePagesAssetsServiceBinding={props.enablePagesAssetsServiceBinding}
 				sourceMapPath={bundle?.sourceMapPath}
 				services={props.bindings.services}
-				experimentalDevenvRuntime={props.experimentalDevenvRuntime}
+				experimentalDevEnv={props.experimentalDevEnv}
 			/>
 		) : (
 			<Remote
@@ -724,7 +708,7 @@ function DevSession(props: DevSessionProps) {
 				// startDevWorker
 				accountId={accountId}
 				setAccountId={setAccountIdAndResolveDeferred}
-				experimentalDevenvRuntime={props.experimentalDevenvRuntime}
+				experimentalDevEnv={props.experimentalDevEnv}
 			/>
 		);
 	} else {

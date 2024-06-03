@@ -172,9 +172,9 @@ export async function startDevServer(
 		),
 	});
 
-	console.log({ experimentalDevenvRuntime: props.experimentalDevenvRuntime });
+	console.log({ experimentalDevEnv: props.experimentalDevEnv });
 
-	if (props.experimentalDevenvRuntime) {
+	if (props.experimentalDevEnv) {
 		devEnv.runtimes.forEach((runtime) => {
 			console.log("devEnv.runtimes.onBundleComplete()");
 			runtime.onBundleComplete({
@@ -257,7 +257,7 @@ export async function startDevServer(
 			workerDefinitions,
 			sourceMapPath: bundle?.sourceMapPath,
 			services: props.bindings.services,
-			experimentalDevenvRuntime: props.experimentalDevenvRuntime,
+			experimentalDevEnv: props.experimentalDevEnv,
 		});
 
 		return {
@@ -308,7 +308,7 @@ export async function startDevServer(
 			},
 			sourceMapPath: bundle?.sourceMapPath,
 			sendMetrics: props.sendMetrics,
-			experimentalDevenvRuntime: props.experimentalDevenvRuntime,
+			experimentalDevEnv: props.experimentalDevEnv,
 			setAccountId: /* noop */ () => {},
 		});
 
