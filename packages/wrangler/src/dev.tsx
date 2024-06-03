@@ -288,7 +288,7 @@ export function devOptions(yargs: CommonYargsArgv) {
 				type: "boolean",
 			})
 			.option("experimental-dev-env", {
-				alias: ["x-devenv"],
+				alias: ["x-dev-env"],
 				type: "boolean",
 				describe:
 					"Use the experimental DevEnv instantiation (unified across wrangler dev and unstable_dev)",
