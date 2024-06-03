@@ -16,7 +16,9 @@ import { useErrorHandler, withErrorBoundary } from "react-error-boundary";
 import onExit from "signal-exit";
 import { fetch } from "undici";
 import { DevEnv } from "../api";
+import { LocalRuntimeController } from "../api/startDevWorker/LocalRuntimeController";
 import { ProxyController } from "../api/startDevWorker/ProxyController";
+import { RemoteRuntimeController } from "../api/startDevWorker/RemoteRuntimeController";
 import { createDeferred } from "../api/startDevWorker/utils";
 import { runCustomBuild } from "../deployment-bundle/run-custom-build";
 import {
@@ -301,21 +303,14 @@ function DevSession(props: DevSessionProps) {
 
 	const [devEnv] = useState(() => {
 		const proxy = new ProxyController();
+		const local = new LocalRuntimeController();
+		const remote = new RemoteRuntimeController();
 		if (props.experimentalDevEnv) {
 			// The ProxyWorker will have a stable host and port, so only listen for the first update
 			proxy.once("ready", async (event: ReadyEvent) => {
 				const url = await event.proxyWorker.ready;
 				const finalIp = url.hostname;
 				const finalPort = parseInt(url.port);
-
-				if (!event.config.dev?.remote) {
-					await maybeRegisterLocalWorker(
-						url,
-						event.config.name,
-						event.proxyData.internalDurableObjects,
-						event.proxyData.entrypointAddresses
-					);
-				}
 
 				if (process.send) {
 					process.send(
@@ -326,9 +321,19 @@ function DevSession(props: DevSessionProps) {
 						})
 					);
 				}
+				local.on("reloadComplete", async (reloadEvent: ReloadCompleteEvent) => {
+					if (!reloadEvent.config.dev?.remote) {
+						await maybeRegisterLocalWorker(
+							url,
+							reloadEvent.config.name,
+							reloadEvent.proxyData.internalDurableObjects,
+							reloadEvent.proxyData.entrypointAddresses
+						);
+					}
+				});
 			});
 		}
-		return new DevEnv({ proxy });
+		return new DevEnv({ proxy, runtimes: [local, remote] });
 	});
 	useEffect(() => {
 		return () => {

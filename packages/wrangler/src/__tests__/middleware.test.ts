@@ -33,7 +33,7 @@ describe("middleware", () => {
 		process.env.EXPERIMENTAL_MIDDLEWARE = "true";
 
 		describe("module workers", () => {
-			it.only("should register a middleware and intercept", async () => {
+			it("should register a middleware and intercept", async () => {
 				const scriptContent = `
 			const middleware = async (request, env, _ctx, middlewareCtx) => {
 				const response = await middlewareCtx.next(request, env);
