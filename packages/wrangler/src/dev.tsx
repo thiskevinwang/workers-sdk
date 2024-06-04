@@ -1,3 +1,4 @@
+import assert from "node:assert";
 import path from "node:path";
 import { isWebContainer } from "@webcontainer/env";
 import { watch } from "chokidar";
@@ -417,6 +418,7 @@ export async function startDev(args: StartDevOptions) {
 			entry,
 			legacyNodeCompat,
 			nodejsCompat,
+			nodejsCompatV2,
 			upstreamProtocol,
 			host,
 			routes,
@@ -461,6 +463,7 @@ export async function startDev(args: StartDevOptions) {
 					minify={args.minify ?? configParam.minify}
 					legacyNodeCompat={legacyNodeCompat}
 					nodejsCompat={nodejsCompat}
+					nodejsCompatV2={nodejsCompatV2}
 					build={configParam.build || {}}
 					define={{ ...configParam.define, ...cliDefines }}
 					initialMode={args.remote ? "remote" : "local"}
@@ -547,6 +550,7 @@ export async function startApiDev(args: StartDevOptions) {
 		entry,
 		legacyNodeCompat,
 		nodejsCompat,
+		nodejsCompatV2,
 		upstreamProtocol,
 		host,
 		routes,
@@ -591,6 +595,7 @@ export async function startApiDev(args: StartDevOptions) {
 			minify: args.minify ?? configParam.minify,
 			legacyNodeCompat,
 			nodejsCompat,
+			nodejsCompatV2,
 			build: configParam.build || {},
 			define: { ...config.define, ...cliDefines },
 			initialMode: args.remote ? "remote" : "local",
@@ -807,7 +812,26 @@ async function validateDevServerSettings(
 
 	const compatibilityFlags =
 		args.compatibilityFlags ?? config.compatibility_flags;
-	const nodejsCompat = compatibilityFlags?.includes("nodejs_compat");
+	const experimental = compatibilityFlags.includes("experimental");
+	const nodejsCompatV2 = compatibilityFlags.includes("nodejs_compat_v2");
+	// nodejsCompatV2 supersedes nodejsCompat
+	// disable nodejsCompat if nodejsCompatV2 is enabled
+	const nodejsCompat = !nodejsCompatV2 ?? compatibilityFlags.includes("nodejs_compat");
+
+	if (nodejsCompatV2) {
+		logger.warn(
+			"Enabling experimental Node.js compatibility mode v2. This feature is still in development and not ready for production use."
+		);
+	}
+
+	assert(
+		!(legacyNodeCompat && (nodejsCompat || nodejsCompatV2)),
+		`The ${nodejsCompat ? "`nodejs_compat`" : "`nodejs_compat_v2`"} compatibility flag cannot be used in conjunction with the legacy \`--node-compat\` flag. If you want to use the Workers ${nodejsCompat ? "`nodejs_compat`" : "`nodejs_compat_v2`"} compatibility flag, please remove the \`--node-compat\` argument from your CLI command or \`node_compat = true\` from your config file.`
+	);
+
+	assert(!(nodejsCompatV2 && !experimental),
+		`The \`nodejs_compat_v2\` compatibility flag is experimental and must be accompanied by \`experimental\` compatibility flag. Add \`experimental\` flag to your compatibility flags.`
+	);
 
 	if (args.experimentalEnableLocalPersistence) {
 		logger.warn(
@@ -829,6 +853,7 @@ async function validateDevServerSettings(
 		upstreamProtocol,
 		legacyNodeCompat,
 		nodejsCompat,
+		nodejsCompatV2,
 		getLocalPort,
 		getInspectorPort,
 		getRuntimeInspectorPort,

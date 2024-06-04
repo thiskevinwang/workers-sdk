@@ -46,6 +46,7 @@ export function useEsbuild({
 	minify,
 	legacyNodeCompat,
 	nodejsCompat,
+	nodejsCompatV2,
 	define,
 	noBundle,
 	findAdditionalModules,
@@ -75,6 +76,7 @@ export function useEsbuild({
 	minify: boolean | undefined;
 	legacyNodeCompat: boolean | undefined;
 	nodejsCompat: boolean | undefined;
+	nodejsCompatV2: boolean | undefined;
 	noBundle: boolean;
 	findAdditionalModules: boolean | undefined;
 	workerDefinitions: WorkerRegistry;
@@ -183,6 +185,7 @@ export function useEsbuild({
 							minify,
 							legacyNodeCompat,
 							nodejsCompat,
+							nodejsCompatV2,
 							doBindings: durableObjects.bindings,
 							define,
 							checkFetch: true,
@@ -265,6 +268,7 @@ export function useEsbuild({
 		minify,
 		legacyNodeCompat,
 		nodejsCompat,
+		nodejsCompatV2,
 		define,
 		assets,
 		services,
