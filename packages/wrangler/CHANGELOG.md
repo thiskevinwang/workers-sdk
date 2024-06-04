@@ -1,5 +1,23 @@
 # wrangler
 
+## 3.59.1
+
+### Patch Changes
+
+- [#5960](https://github.com/cloudflare/workers-sdk/pull/5960) [`e648825`](https://github.com/cloudflare/workers-sdk/commit/e6488257f9376d415d970b045d77f0223d2f7884) Thanks [@petebacondarwin](https://github.com/petebacondarwin)! - fix: avoid injecting esbuild watch stubs into production Worker code
+
+  When we added the ability to include additional modules in the deployed bundle of a Worker,
+  we inadvertently also included some boiler plate code that is only needed at development time.
+
+  This fix ensures that this code is only injected if we are running esbuild in watch mode
+  (e.g. `wrangler dev`) and not when building for deployment.
+
+  It is interesting to note that this boilerplate only gets included in the production code
+  if there is an import of CommonJS code in the Worker, which esbuild needs to convert to an
+  ESM import.
+
+  Fixes [#4269](https://github.com/cloudflare/workers-sdk/issues/4269)
+
 ## 3.59.0
 
 ### Minor Changes
